@@ -1,6 +1,7 @@
 package com.example.reviewms.review.controller;
 
 import com.example.reviewms.review.entity.Review;
+import com.example.reviewms.review.messaging.ReviewMessageProducer;
 import com.example.reviewms.review.service.ReviewService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,9 +13,11 @@ import java.util.List;
 @RequestMapping("/reviews")
 public class ReviewController {
     private final ReviewService reviewService;
+    private final ReviewMessageProducer reviewMessageProducer;
 
-    public ReviewController(ReviewService reviewService) {
+    public ReviewController(ReviewService reviewService, ReviewMessageProducer reviewMessageProducer) {
         this.reviewService = reviewService;
+        this.reviewMessageProducer = reviewMessageProducer;
     }
 
     @GetMapping
@@ -30,8 +33,10 @@ public class ReviewController {
     @PostMapping
     public ResponseEntity<String> addReview(@RequestBody Review review, @RequestParam Long companyId){
         boolean reviewSaved = reviewService.addReview(review, companyId);
-        if(reviewSaved)
+        if(reviewSaved) {
+            reviewMessageProducer.sendMessage(review);
             return new ResponseEntity<>("Review added successfully", HttpStatus.CREATED);
+        }
         return new ResponseEntity<>("Company not found", HttpStatus.NOT_FOUND);
     }
 
@@ -49,6 +54,15 @@ public class ReviewController {
         if(deletedReview)
             return new ResponseEntity<>("Review deleted successfully", HttpStatus.OK);
         return new ResponseEntity<>("Review not found", HttpStatus.NOT_FOUND);
+    }
+
+    @GetMapping("/averageRating")
+    public Double getAverageRating(@RequestParam Long id) {
+        return reviewService.findAllReviews(id).
+                stream()
+                .mapToDouble(x -> x.getRating())
+                .average()
+                .orElse(0.0);
     }
 
 }
